@@ -14,6 +14,12 @@ const debounce = (func, wait = 1000) => {
   };
 };
 
+// Open small window function
+const openSmallWindow = () => {
+  const windowFeatures = 'width=400,height=400,menubar=no,toolbar=no,location=no,resizable=yes,scrollbars=yes,status=yes';
+  window.open('https://chat.openai.com', '_blank', windowFeatures);
+};
+
 // function that injects code to a specific tab
 const injectScript = debounce((tabId) => {
   chrome.scripting.executeScript(
@@ -25,8 +31,6 @@ const injectScript = debounce((tabId) => {
 });
 chrome.runtime.onInstalled.addListener((detail) => {
   if (detail.reason === 'install') {
-    chrome.tabs.create({ url: 'https://ezi.notion.site/Superpower-ChatGPT-FAQ-9d43a8a1c31745c893a4080029d2eb24' });
-    chrome.tabs.create({ url: 'https://superpowerdaily.com' });
     chrome.tabs.create({ url: 'https://chat.openai.com', active: true });
   }
 });

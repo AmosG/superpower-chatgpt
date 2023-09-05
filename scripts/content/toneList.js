@@ -1,6 +1,8 @@
 // eslint-disable-next-line no-unused-vars
 const toneList = [
   { code: 'default', name: 'Default', description: 'No specific tone instruction' },
+  { code: 'amos', name: 'Amos', description: 'This tone is used' },
+  { code: 'commanding', name: 'Commanding', description: 'This tone exudes authority and confidence while maintaining respect. It is characterized by direct and assertive language. Example: "I expect a thorough analysis of the situation, followed by an action plan to address the issue immediately."' },
   { code: 'authoritative', name: 'Authoritative', description: 'This tone is used to convey expertise or knowledge on a subject. It is characterized by a commanding and confident tone. Example: &quot;As a renowned surgeon with over 20 years of experience, I can assure you that this procedure is safe and effective.&quot;' },
   { code: 'clinical', name: 'Clinical', description: 'This tone is used in technical or medical writing and is characterized by a straightforward, objective, and factual tone. Example: &quot;The results of the study show that the medication reduced symptoms in 75% of patients.&quot;' },
   { code: 'concise', name: 'Concise', description: 'This tone responds with the fewest words & characters possible. It skips extra words & gets right to it. Example: &quot;Data shows sales up 50%,&quot; instead of &quot;Based on the data that we have collected, it appears that there has been an increase in sales by 50%.&quot;' },
