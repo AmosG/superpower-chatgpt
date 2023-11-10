@@ -1,7 +1,10 @@
 /* eslint-disable no-unused-vars */
-/* global getInstalledPlugins */
+/* global getInstalledPlugins, initializeRegenerateResponseButton */
 // eslint-disable-next-line no-unused-vars
-function modelSwitcher(models, selectedModel, idPrefix, customModels, forceDark = false) {
+function modelSwitcher(models, selectedModel, idPrefix, customModels, autoSync, forceDark = false) {
+  if (selectedModel.slug === 'gpt-4-code-interpreter' && autoSync) {
+    showAutoSyncWarning('Uploading files with <b style="color:white;">Advanced Data Analysis</b> model requires <b style="color:white;">Auto Sync to be OFF</b>. Please turn off Auto Sync if you need to upload a file. You can turn Auto Sync back ON (<b style="color:white;">CMD/CTRL+ALT+A</b>) again after submitting your file.');
+  }
   return `<button id="${idPrefix}-model-switcher-button" class="relative w-full cursor-pointer rounded-md border ${forceDark ? 'border-white/20 bg-gray-800' : 'border-gray-300 bg-white'} pt-1 pl-3 pr-10 text-left focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 dark:border-white/20 dark:bg-gray-800 sm:text-sm" type="button">
   <label class="block text-xs ${forceDark ? 'text-gray-500' : 'text-gray-700'} dark:text-gray-500">Model</label>
   <span class="inline-flex w-full truncate font-semibold ${forceDark ? 'text-gray-100' : 'text-gray-800'} dark:text-gray-100">
@@ -28,7 +31,7 @@ function createModelListDropDown(models, selectedModel, idPrefix, customModels, 
    <span class="${forceDark ? 'text-gray-500' : 'text-gray-800'} dark:text-gray-500 text-xs">${model.description}</span>
  </div>
  ${model.slug === selectedModel.slug ? `<span id="${idPrefix}-model-switcher-checkmark" style="right:36px;" class="absolute inset-y-0 right-4 flex items-center ${forceDark ? 'text-gray-100' : 'text-gray-800'} dark:text-gray-100">
- <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 h-5 w-5" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg">
+ <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg">
  <polyline points="20 6 9 17 4 12"></polyline>
  </svg>
  </span>` : ''}
@@ -42,17 +45,70 @@ function createModelSpecifics(rating, forceDark = false) {
   const emptyPills = [...Array(total - filled)].map(() => `<div class="h-2 w-full ml-1 rounded-lg ${forceDark ? 'bg-gray-600' : 'bg-gray-200'} dark:bg-gray-600"></div>`);
   return filledPills.concat(emptyPills).join('');
 }
-function addModelSwitcherEventListener(idPrefix, forceDark = false) {
-  const modelSwitcherButton = document.querySelector(`#${idPrefix}-model-switcher-button`);
-  modelSwitcherButton.addEventListener('click', () => {
-    const modelListDropdown = document.querySelector(`#${idPrefix}-model-list-dropdown`);
-    const cl = modelListDropdown.classList;
-    if (cl.contains('block')) {
-      modelListDropdown.classList.replace('block', 'hidden');
-    } else {
-      modelListDropdown.classList.replace('hidden', 'block');
+function showAutoSyncWarning(warningText) {
+  const warningModal = document.createElement('div');
+  warningModal.style = 'position:fixed;top:0px;left:0px;width:100%;height:100%;background-color:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;color:lightslategray;';
+  warningModal.id = 'auto-sync-warning-modal';
+
+  warningModal.addEventListener('click', (e) => {
+    if (e.target.id === 'auto-sync-warning-modal') {
+      warningModal.remove();
     }
   });
+
+  const warningModalContent = document.createElement('div');
+  warningModalContent.style = 'width:400px;background-color:#0b0d0e;border-radius:4px;padding:16px;display:flex;flex-direction:column;align-items:flex-start;justify-content:start;';
+  warningModal.appendChild(warningModalContent);
+  const warningModalTitle = document.createElement('div');
+  warningModalTitle.style = 'font-size:1.25rem;font-weight:500;color:white;';
+  warningModalTitle.textContent = 'Auto Sync';
+  warningModalContent.appendChild(warningModalTitle);
+
+  const warningModalFormatTitle = document.createElement('div');
+  warningModalFormatTitle.style = 'font-size:0.875rem;font-weight:500;margin-top:32px;color:#ccc';
+  warningModalFormatTitle.innerHTML = warningText || 'This feature is not supported when Auto Sync is ON. Please turn off Auto Sync to use this feature.';
+  warningModalContent.appendChild(warningModalFormatTitle);
+
+  // modal action wrapper
+  const warningModalActionWrapper = document.createElement('div');
+  warningModalActionWrapper.style = 'display:flex;align-items:center;justify-content:space-between;width:100%;margin-top:24px;';
+  warningModalContent.appendChild(warningModalActionWrapper);
+
+  // cancel button
+  const warningModalCancelButton = document.createElement('button');
+  warningModalCancelButton.style = 'width:30%;height:40px;border-radius:4px;border:1px solid #565869;background-color:#40414f;color:white;font-size:0.875rem;margin-top:auto; margin-right: 8px;';
+  warningModalCancelButton.textContent = 'Cancel';
+  warningModalCancelButton.addEventListener('click', () => {
+    warningModal.remove();
+  });
+  warningModalActionWrapper.appendChild(warningModalCancelButton);
+  // confirm button
+  const warningModalConfirmButton = document.createElement('button');
+  warningModalConfirmButton.style = 'width:70%;height:40px;border-radius:4px;border:1px solid #565869;background-color:#40414f;color:white;font-size:0.875rem;margin-top:auto; margin-left: 8px;';
+  warningModalConfirmButton.textContent = 'Turn off Auto Sync and Reload';
+  warningModalConfirmButton.addEventListener('click', () => {
+    chrome.storage.local.get(['settings'], ({ settings }) => {
+      chrome.storage.local.set({ settings: { ...settings, autoSync: false } }, () => {
+        window.location.reload();
+      });
+    });
+  });
+  warningModalActionWrapper.appendChild(warningModalConfirmButton);
+  document.body.appendChild(warningModal);
+}
+function addModelSwitcherEventListener(idPrefix, forceDark = false) {
+  const modelSwitcherButton = document.querySelector(`#${idPrefix}-model-switcher-button`);
+  if (modelSwitcherButton) {
+    modelSwitcherButton.addEventListener('click', () => {
+      const modelListDropdown = document.querySelector(`#${idPrefix}-model-list-dropdown`);
+      const cl = modelListDropdown.classList;
+      if (cl.contains('block')) {
+        modelListDropdown.classList.replace('block', 'hidden');
+      } else {
+        modelListDropdown.classList.replace('hidden', 'block');
+      }
+    });
+  }
   // close modelListDropdown when clicked outside
   document.addEventListener('click', (e) => {
     const modelListDropdown = document.querySelector(`#${idPrefix}-model-list-dropdown`);
@@ -111,6 +167,18 @@ function addModelSwitcherEventListener(idPrefix, forceDark = false) {
         const modelSlug = option.id.split(`${idPrefix}-model-switcher-option-`)[1];
         const selectedModel = allModels.find((m) => m.slug === modelSlug);
         const pluginsDropdownWrapper = document.querySelector(`#plugins-dropdown-wrapper-${idPrefix}`);
+        const continueGeneratingButton = document.querySelector('#continue-generating-button');
+        if (selectedModel.slug === 'gpt-4-code-interpreter' && settings.autoSync) {
+          showAutoSyncWarning('Uploading files with <b style="color:white;">Advanced Data Analysis</b> model requires <b style="color:white;">Auto Sync to be OFF</b>. Please turn off Auto Sync if you need to upload a file. You can turn Auto Sync back ON (<b style="color:white;">CMD/CTRL+ALT+A</b>) again after submitting your file.');
+        }
+
+        if (selectedModel.slug.includes('plugins')) {
+          if (continueGeneratingButton) {
+            continueGeneratingButton.remove();
+          }
+        } else if (!continueGeneratingButton) {
+          initializeRegenerateResponseButton();
+        }
         if (pluginsDropdownWrapper) {
           if (selectedModel.slug.includes('plugins')) {
             getInstalledPlugins();
@@ -118,8 +186,34 @@ function addModelSwitcherEventListener(idPrefix, forceDark = false) {
           } else {
             pluginsDropdownWrapper.style.display = 'none';
           }
+          const textInput = document.querySelector('main form textarea');
+          if (selectedModel.slug !== 'gpt-4-code-interpreter' && textInput) {
+            textInput.style.paddingLeft = '1rem';
+            const uploadButton = textInput.parentElement.querySelector('button[aria-label="Attach files"]');
+            if (uploadButton) uploadButton.remove();
+          }
+          const submitButton = document.querySelector('main form textarea ~ button');
+          if (submitButton && !submitButton.disabled) {
+            if (selectedModel.tags.includes('gpt4')) {
+              submitButton.style.backgroundColor = '#AB68FF';
+            } else {
+              submitButton.style.backgroundColor = '#19C37D';
+            }
+          }
         }
-        chrome.storage.local.set({ settings: { ...settings, selectedModel } });
+        chrome.storage.local.set({ settings: { ...settings, selectedModel } }, () => {
+          if (selectedModel.tags.includes('gpt4') && !selectedModel.tags.includes('Unofficial')) {
+            const arkoseIframeWrapper = document.querySelector('[class="arkose-35536E1E-65B4-4D96-9D97-6ADB7EFF8147-wrapper"]');
+            if (!arkoseIframeWrapper) {
+              window.location.reload();
+            }
+          }
+          // focus on input
+          const textInput = document.querySelector('main form textarea');
+          if (textInput) {
+            textInput.focus();
+          }
+        });
       });
     });
     chrome.storage.onChanged.addListener((e) => {

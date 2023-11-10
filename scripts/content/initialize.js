@@ -1,24 +1,22 @@
-/* global getAccount, getModels, getConversationLimit, initializeStorage, cleanNav, initializeContinue, initializeExport, initializeSettings, initializePromptHistory, initializePromptLibrary, initializeNewsletter, initializeAutoSave, addNavToggleButton, initializeAnnouncement, initializeReleaseNote, initializeReplaceDeleteConversationButton, initializeCopyAndCounter, initializeAddToPromptLibrary, initializeTimestamp, updateNewChatButtonNotSynced, addAsyncInputEvents, initializeContentMessageListeners, registerShortkeys, addDevIndicator, addExpandButton, openLinksInNewTab, getArkose */
+/* global navigation, initializeStorage, cleanNav, initializeContinue, initializeExport, initializeSettings, initializePromptHistory, initializePromptLibrary, initializeNewsletter, initializeAutoSave, addNavToggleButton, initializeAnnouncement, initializeReleaseNote, initializeReplaceDeleteConversationButton, initializeCopyAndCounter, initializeAddToPromptLibrary, initializeTimestamp, updateNewChatButtonNotSynced, addAsyncInputEvents, addDevIndicator, addExpandButton, openLinksInNewTab, initializeKeyboardShortcuts, addArkoseCallback, addQuickAccessMenuEventListener, upgradeCustomInstructions, addAutoSyncToggleButton, addSounds */
 
 // eslint-disable-next-line no-unused-vars
 function initialize() {
   const historyButton = document.querySelector('a[id="my-prompt-history-button"]');
   if (window.location.pathname.startsWith('/share/') && !window.location.pathname.endsWith('/continue')) return;
+
   if (!historyButton) {
     setTimeout(() => {
       initializeStorage().then(() => {
-        registerShortkeys();
-        getArkose();
-        getAccount();
-        getModels();
-        getConversationLimit();
+        // watchError();
         openLinksInNewTab();
         addNavToggleButton();
-        initializeContentMessageListeners();
+        addQuickAccessMenuEventListener();
         cleanNav();
+        upgradeCustomInstructions();
+        initializeExport();
         initializeContinue();
         initializeNewsletter();
-        initializeExport();
         initializeSettings();
         initializeAnnouncement();
         initializeReleaseNote();
@@ -26,18 +24,28 @@ function initialize() {
         initializePromptHistory();
         addExpandButton();
         addDevIndicator();
+        initializeKeyboardShortcuts();
+        addSounds();
+        // showAutoSyncToast();
         setTimeout(() => {
           chrome.storage.local.get(['settings'], (result) => {
             const { settings } = result;
             if ((typeof settings?.autoSync === 'undefined' || settings?.autoSync) && !window.location.pathname.startsWith('/share/')) {
-            // if (typeof settings?.autoSync === 'undefined' || settings?.autoSync) {
+              // if (typeof settings?.autoSync === 'undefined' || settings?.autoSync) {
               initializeAutoSave();
+              addArkoseCallback();
             } else {
+              addAutoSyncToggleButton();
               initializeCopyAndCounter();
               initializeAddToPromptLibrary();
               initializeTimestamp();
               updateNewChatButtonNotSynced();
               addAsyncInputEvents();
+              navigation.addEventListener('navigate', () => {
+                setTimeout(() => {
+                  addAsyncInputEvents();
+                }, 500);
+              });
             }
             initializeReplaceDeleteConversationButton();
           });

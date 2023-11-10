@@ -1,4 +1,4 @@
-/* global highlight, highlightBracket, addUserPromptToHistory, addButtonToNavFooter,createModal, debounce, deletePrompt, incrementUseCount, getPrompts, report, vote, toast, openSubmitPromptModal, dropdown, addDropdownEventListener, languageList, categoryList, sortByList, reportReasonList */
+/* global highlight, highlightBracket, addUserPromptToHistory, addButtonToNavFooter,createModal, debounce, toast, openSubmitPromptModal, dropdown, addDropdownEventListener, languageList, categoryList, sortByList, reportReasonList */
 
 let promptLibraryPageNumber = 1;
 let promptLibrarySearchTerm = '';
@@ -13,7 +13,16 @@ function createPromptLibraryModal() {
     promptLibrarySearchTerm = '';
     promptLibraryMaxPageNumber = 0;
     // fetch data
-    getPrompts(promptLibraryPageNumber, promptLibrarySearchTerm, selectedLibrarySortBy.code, selectedLibraryLanguage.code, selectedLibraryCategory.code).then((data) => {
+    chrome.runtime.sendMessage({
+      getPrompts: true,
+      detail: {
+        pageNumber: promptLibraryPageNumber,
+        searchTerm: promptLibrarySearchTerm,
+        sortBy: selectedLibrarySortBy.code,
+        language: selectedLibraryLanguage.code,
+        category: selectedLibraryCategory.code,
+      },
+    }, (data) => {
       promptLibraryMaxPageNumber = data.count % 24 === 0 ? data.count / 24 : Math.floor(data.count / 24) + 1;
       // create settings modal content
       const bodyContent = promptLibraryModalContent(data);
@@ -104,60 +113,7 @@ function promptLibraryListComponent(libraryData, loading = false) {
     libraryItemActionWrapper.classList = 'visible';
     // libraryItemActionWrapper.classList = 'invisible group-hover:visible';
     libraryItemActionWrapper.style = 'position:absolute; top: 12px; right:4px; display: flex; justify-content: flex-end; align-items: center;';
-    // thumbs up
-    const libraryItemThumbsUp = document.createElement('span');
-    libraryItemThumbsUp.id = `library-item-thumbs-up-${libraryPrompt.id}`;
-    libraryItemThumbsUp.title = 'Upvote this prompt';
-    libraryItemThumbsUp.style = 'color: lightslategray; font-size:1.2em; margin-right: 8px; cursor: pointer;';
-    libraryItemThumbsUp.innerHTML = '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"> <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>';
-    libraryItemThumbsUp.addEventListener('mouseenter', () => {
-      libraryItemThumbsUp.style.color = '#eee';
-    });
-    libraryItemThumbsUp.addEventListener('mouseleave', () => {
-      libraryItemThumbsUp.style.color = 'lightslategray';
-    });
-    libraryItemThumbsUp.addEventListener('click', () => {
-      vote(libraryPrompt.id, 'up').then((data) => {
-        if (data.status === 'success') {
-          toast('Prompt upvoted');
-          const curUpvoteCount = document.getElementById(`prompt-upvotes-count-${libraryPrompt.id}`);
-          curUpvoteCount.textContent = parseInt(curUpvoteCount.textContent, 10) + 1;
-        }
-        if (data.status === 'same user') {
-          toast('You have already voted for this prompt');
-        }
-      });
-      const curLibraryItemActionWrapper = document.getElementById(`library-item-action-wrapper-${libraryPrompt.id}`);
-      curLibraryItemActionWrapper.style.opacity = '0.3';
-      curLibraryItemActionWrapper.style.pointerEvents = 'none';
-    });
-    // thumbs down
-    const libraryItemThumbsDown = document.createElement('span');
-    libraryItemThumbsDown.id = `library-item-thumbs-down-${libraryPrompt.id}`;
-    libraryItemThumbsDown.title = 'Downvote this prompt';
-    libraryItemThumbsDown.style = 'color: lightslategray; font-size:1.2em; margin-right: 12px; cursor: pointer;';
-    libraryItemThumbsDown.innerHTML = '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"> <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path></svg>';
-    libraryItemThumbsDown.addEventListener('mouseenter', () => {
-      libraryItemThumbsDown.style.color = '#eee';
-    });
-    libraryItemThumbsDown.addEventListener('mouseleave', () => {
-      libraryItemThumbsDown.style.color = 'lightslategray';
-    });
-    libraryItemThumbsDown.addEventListener('click', () => {
-      vote(libraryPrompt.id, 'down').then((data) => {
-        if (data.status === 'success') {
-          toast('Prompt downvoted');
-          const curUpvoteCount = document.getElementById(`prompt-upvotes-count-${libraryPrompt.id}`);
-          curUpvoteCount.textContent = parseInt(curUpvoteCount.textContent, 10) - 1;
-        }
-        if (data.status === 'same user') {
-          toast('You have already voted for this prompt');
-        }
-      });
-      const curLibraryItemActionWrapper = document.getElementById(`library-item-action-wrapper-${libraryPrompt.id}`);
-      curLibraryItemActionWrapper.style.opacity = '0.3';
-      curLibraryItemActionWrapper.style.pointerEvents = 'none';
-    });
+
     // flag
     const libraryItemFlag = document.createElement('span');
     libraryItemFlag.id = `library-item-flag-${libraryPrompt.id}`;
@@ -175,8 +131,8 @@ function promptLibraryListComponent(libraryData, loading = false) {
       openReportPromptModal(libraryPrompt);
     });
 
-    libraryItemActionWrapper.appendChild(libraryItemThumbsUp);
-    libraryItemActionWrapper.appendChild(libraryItemThumbsDown);
+    // libraryItemActionWrapper.appendChild(libraryItemThumbsUp);
+    // libraryItemActionWrapper.appendChild(libraryItemThumbsDown);
     libraryItemActionWrapper.appendChild(libraryItemFlag);
 
     libraryItem.appendChild(libraryItemActionWrapper);
@@ -200,7 +156,7 @@ function promptLibraryListComponent(libraryData, loading = false) {
     libraryItem.appendChild(libraryItemText);
 
     const libraryItemCategories = document.createElement('div');
-    libraryItemCategories.id = `library-item-categories-${libraryPrompt.id} `;
+    libraryItemCategories.id = `library-item-categories-${libraryPrompt.id}`;
     libraryItemCategories.style = 'display:flex; justify-content: flex-start; align-items:center; width: 100%; margin-top: 12px;';
     // categories
     libraryPrompt.categories.forEach((category) => {
@@ -223,18 +179,18 @@ function promptLibraryListComponent(libraryData, loading = false) {
     libraryItem.appendChild(libraryItemCategories);
 
     const libraryItemFooter = document.createElement('div');
-    libraryItemFooter.id = `library-item-footer-${libraryPrompt.id} `;
+    libraryItemFooter.id = `library-item-footer-${libraryPrompt.id}`;
     libraryItemFooter.style = 'display:flex; justify-content: space-between; align-items:flex-end; width: 100%; white-space: break-spaces; overflow-wrap: break-word;margin-top: 8px';
     // created by url
     const libraryItemInfoWrapper = document.createElement('span');
-    libraryItemInfoWrapper.id = `library-item-created-by-${libraryPrompt.id} `;
+    libraryItemInfoWrapper.id = `library-item-info-wrapper-${libraryPrompt.id}`;
     libraryItemInfoWrapper.style = 'display: flex; align-items:flex-end; justify-content: start; color: lightslategray; font-size:0.8em; width: 100%; white-space: break-spaces; overflow-wrap: break-word;';
     const libraryItemCreatedBy = document.createElement('span');
-    libraryItemCreatedBy.id = `library-item-created-by-${libraryPrompt.id} `;
+    libraryItemCreatedBy.id = `library-item-created-by-${libraryPrompt.id}`;
     libraryItemCreatedBy.textContent = 'by ';
     libraryItemInfoWrapper.appendChild(libraryItemCreatedBy);
     const libraryItemCreatedByUrl = document.createElement('a');
-    libraryItemCreatedByUrl.id = `library-item-created-by-url-${libraryPrompt.id} `;
+    libraryItemCreatedByUrl.id = `library-item-created-by-url-${libraryPrompt.id}`;
     libraryItemCreatedByUrl.style = 'color: #919dd4; text-decoration:underline;max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
     libraryItemCreatedByUrl.innerHTML = highlight(libraryPrompt.created_by?.nickname, promptLibrarySearchTerm);
     libraryItemCreatedByUrl.href = libraryPrompt.created_by?.url;
@@ -253,25 +209,92 @@ function promptLibraryListComponent(libraryData, loading = false) {
     });
     libraryItemInfoWrapper.appendChild(libraryItemCreatedByUrl);
     const libraryItemUseCount = document.createElement('span');
-    libraryItemUseCount.id = `library-item-use-count-${libraryPrompt.id} `;
+    libraryItemUseCount.id = `library-item-use-count-${libraryPrompt.id}`;
     libraryItemUseCount.title = `used ${libraryPrompt.num_used} times`;
     libraryItemUseCount.style = 'display:flex;color: lightslategray; margin-left: 24px;';
     libraryItemUseCount.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="lightslategray" stroke="lightslategray" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 mr-2" height="1em" width="1em" viewBox="0 0 448 512"><path d="M240 32C266.5 32 288 53.49 288 80V432C288 458.5 266.5 480 240 480H208C181.5 480 160 458.5 160 432V80C160 53.49 181.5 32 208 32H240zM240 80H208V432H240V80zM80 224C106.5 224 128 245.5 128 272V432C128 458.5 106.5 480 80 480H48C21.49 480 0 458.5 0 432V272C0 245.5 21.49 224 48 224H80zM80 272H48V432H80V272zM320 144C320 117.5 341.5 96 368 96H400C426.5 96 448 117.5 448 144V432C448 458.5 426.5 480 400 480H368C341.5 480 320 458.5 320 432V144zM368 432H400V144H368V432z"/></svg> ${libraryPrompt.num_used}`;
     libraryItemInfoWrapper.appendChild(libraryItemUseCount);
-    libraryItemFooter.appendChild(libraryItemInfoWrapper);
+
+    // thumbs up
+    const libraryItemThumbsUp = document.createElement('span');
+    libraryItemThumbsUp.id = `library-item-thumbs-up-${libraryPrompt.id}`;
+    libraryItemThumbsUp.title = 'Upvote this prompt';
+    libraryItemThumbsUp.style = 'color: lightslategray; font-size:1.2em; margin-left: 24px; position:relative; bottom:4px; cursor: pointer;';
+    libraryItemThumbsUp.innerHTML = '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"> <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>';
+    libraryItemThumbsUp.addEventListener('mouseenter', () => {
+      libraryItemThumbsUp.style.color = '#eee';
+    });
+    libraryItemThumbsUp.addEventListener('mouseleave', () => {
+      libraryItemThumbsUp.style.color = 'lightslategray';
+    });
+    libraryItemThumbsUp.addEventListener('click', () => {
+      chrome.runtime.sendMessage({
+        vote: true,
+        detail: {
+          promptId: libraryPrompt.id,
+          voteType: 'up',
+        },
+      }, (data) => {
+        if (data.status === 'success') {
+          toast('Prompt upvoted');
+          const curUpvoteCount = document.getElementById(`prompt-upvotes-count-${libraryPrompt.id}`);
+          curUpvoteCount.textContent = parseInt(curUpvoteCount.textContent, 10) + 1;
+        }
+        if (data.status === 'same user') {
+          toast('You have already voted for this prompt');
+        }
+      });
+      const curLibraryItemActionWrapper = document.getElementById(`library-item-action-wrapper-${libraryPrompt.id}`);
+      curLibraryItemActionWrapper.style.opacity = '0.3';
+      curLibraryItemActionWrapper.style.pointerEvents = 'none';
+    });
+    libraryItemInfoWrapper.appendChild(libraryItemThumbsUp);
 
     // votes
     const libraryItemVoteCount = document.createElement('span');
-    libraryItemVoteCount.id = `library-item-vote-count-${libraryPrompt.id} `;
+    libraryItemVoteCount.id = `library-item-vote-count-${libraryPrompt.id}`;
     libraryItemVoteCount.title = `upvoted ${libraryPrompt.votes} times`;
-    libraryItemVoteCount.style = 'display:flex;color: lightslategray; margin-left: 24px;';
-    libraryItemVoteCount.innerHTML = `<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 mr-2" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"> <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg> <span id="prompt-upvotes-count-${libraryPrompt.id}">${libraryPrompt.votes}</span>`;
+    libraryItemVoteCount.style = 'display:flex;color: lightslategray; margin: 0 8px;';
+    libraryItemVoteCount.innerHTML = `<span id="prompt-upvotes-count-${libraryPrompt.id}">${libraryPrompt.votes}</span>`;
     libraryItemInfoWrapper.appendChild(libraryItemVoteCount);
-    libraryItemFooter.appendChild(libraryItemInfoWrapper);
 
+    // thumbs down
+    const libraryItemThumbsDown = document.createElement('span');
+    libraryItemThumbsDown.id = `library-item-thumbs-down-${libraryPrompt.id}`;
+    libraryItemThumbsDown.title = 'Downvote this prompt';
+    libraryItemThumbsDown.style = 'color: lightslategray; font-size:1.2em; cursor: pointer;';
+    libraryItemThumbsDown.innerHTML = '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"> <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path></svg>';
+    libraryItemThumbsDown.addEventListener('mouseenter', () => {
+      libraryItemThumbsDown.style.color = '#eee';
+    });
+    libraryItemThumbsDown.addEventListener('mouseleave', () => {
+      libraryItemThumbsDown.style.color = 'lightslategray';
+    });
+    libraryItemThumbsDown.addEventListener('click', () => {
+      chrome.runtime.sendMessage({
+        vote: true,
+        detail: {
+          promptId: libraryPrompt.id,
+          voteType: 'down',
+        },
+      }, (data) => {
+        if (data.status === 'success') {
+          toast('Prompt downvoted');
+          const curUpvoteCount = document.getElementById(`prompt-upvotes-count-${libraryPrompt.id}`);
+          curUpvoteCount.textContent = parseInt(curUpvoteCount.textContent, 10) - 1;
+        }
+        if (data.status === 'same user') {
+          toast('You have already voted for this prompt');
+        }
+      });
+      const curLibraryItemActionWrapper = document.getElementById(`library-item-action-wrapper-${libraryPrompt.id}`);
+      curLibraryItemActionWrapper.style.opacity = '0.3';
+      curLibraryItemActionWrapper.style.pointerEvents = 'none';
+    });
+    libraryItemInfoWrapper.appendChild(libraryItemThumbsDown);
     // Share
     const libraryItemShareButton = document.createElement('span');
-    libraryItemShareButton.id = `library-item-share-button-${libraryPrompt.id} `;
+    libraryItemShareButton.id = `library-item-share-button-${libraryPrompt.id}`;
     libraryItemShareButton.title = 'Share this prompt';
     libraryItemShareButton.style = 'display:flex;color: lightslategray; margin-left: 24px;position: relative;bottom:3px;cursor: pointer;';
     libraryItemShareButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512" stroke="currentColor" fill="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-5" height="1em" width="1em"><path d="M173 131.5C229.2 75.27 320.3 75.27 376.5 131.5C430 185 432.9 270.9 383 327.9L377.7 334C368.9 344 353.8 345 343.8 336.3C333.8 327.6 332.8 312.4 341.5 302.4L346.9 296.3C380.1 258.3 378.2 201.1 342.5 165.4C305.1 127.1 244.4 127.1 206.1 165.4L93.63 278.7C56.19 316.2 56.19 376.9 93.63 414.3C129.3 449.1 186.6 451.9 224.5 418.7L230.7 413.3C240.6 404.6 255.8 405.6 264.5 415.6C273.3 425.5 272.2 440.7 262.3 449.4L256.1 454.8C199.1 504.6 113.2 501.8 59.69 448.2C3.505 392.1 3.505 300.1 59.69 244.8L173 131.5zM467 380.5C410.8 436.7 319.7 436.7 263.5 380.5C209.1 326.1 207.1 241.1 256.9 184.1L261.6 178.7C270.3 168.7 285.5 167.7 295.5 176.4C305.5 185.1 306.5 200.3 297.8 210.3L293.1 215.7C259.8 253.7 261.8 310.9 297.4 346.6C334.9 384 395.6 384 433.1 346.6L546.4 233.3C583.8 195.8 583.8 135.1 546.4 97.7C510.7 62.02 453.4 60.11 415.5 93.35L409.3 98.7C399.4 107.4 384.2 106.4 375.5 96.44C366.7 86.47 367.8 71.3 377.7 62.58L383.9 57.22C440.9 7.348 526.8 10.21 580.3 63.76C636.5 119.9 636.5 211 580.3 267.2L467 380.5z"/></svg>';
@@ -292,6 +315,7 @@ function promptLibraryListComponent(libraryData, loading = false) {
       libraryItemShareButton.style.color = 'lightslategray';
     });
     libraryItemInfoWrapper.appendChild(libraryItemShareButton);
+
     libraryItemFooter.appendChild(libraryItemInfoWrapper);
 
     // library item action buttons wrapper
@@ -324,10 +348,17 @@ function promptLibraryListComponent(libraryData, loading = false) {
       textAreaElement.dispatchEvent(new Event('input', { bubbles: true }));
       textAreaElement.dispatchEvent(new Event('change', { bubbles: true }));
       if (event.shiftKey || libraryPrompt.hide_full_prompt) {
-        submitButton.click();
+        setTimeout(() => {
+          submitButton.click();
+        }, 300);
       }
       document.querySelector('button[id="modal-close-button-community-prompts"]').click();
-      incrementUseCount(libraryPrompt.id);
+      chrome.runtime.sendMessage({
+        incrementUseCount: true,
+        detail: {
+          promptId: libraryPrompt.id,
+        },
+      });
     });
     // edit button
     const libraryItemEditButton = document.createElement('button');
@@ -335,7 +366,7 @@ function promptLibraryListComponent(libraryData, loading = false) {
     libraryItemEditButton.style = 'font-size:0.7em; padding:4px 8px; margin-left:8px;width:60px;color:lightgray;';
     libraryItemEditButton.textContent = 'Edit';
     libraryItemEditButton.addEventListener('click', () => {
-      openSubmitPromptModal(libraryPrompt.text, libraryPrompt.model_slug, libraryPrompt.id, libraryPrompt.title, libraryPrompt.categories, libraryPrompt.language, libraryPrompt.hide_full_prompt);
+      openSubmitPromptModal(libraryPrompt.text, libraryPrompt.model_slug, libraryPrompt.id, libraryPrompt.title, libraryPrompt.categories, libraryPrompt.language, true, libraryPrompt.hide_full_prompt);
     });
     // delete button
     const libraryItemDeleteButton = document.createElement('button');
@@ -344,9 +375,14 @@ function promptLibraryListComponent(libraryData, loading = false) {
     libraryItemDeleteButton.textContent = 'Delete';
     libraryItemDeleteButton.addEventListener('click', (e) => {
       if (e.target.textContent === 'Confirm') {
-        deletePrompt(libraryPrompt.id);
+        chrome.runtime.sendMessage({
+          deletePrompt: true,
+          detail: {
+            promptId: libraryPrompt.id,
+          },
+        });
         // remove the item from the list
-        const deletedLibraryItem = document.querySelector(`#library-item-${libraryPrompt.id} `);
+        const deletedLibraryItem = document.querySelector(`#library-item-${libraryPrompt.id}`);
         deletedLibraryItem.style.display = 'none';
       } else {
         e.target.textContent = 'Confirm';
@@ -363,7 +399,7 @@ function promptLibraryListComponent(libraryData, loading = false) {
     });
 
     chrome.storage.sync.get(['user_id'], (res) => {
-      if (res.user_id === libraryPrompt.created_by.id) {
+      if (res.user_id === libraryPrompt?.created_by?.id) {
         libraryItemActionButtons.appendChild(libraryItemDeleteButton);
         libraryItemActionButtons.appendChild(libraryItemEditButton);
       }
@@ -380,7 +416,16 @@ function promptLibraryListComponent(libraryData, loading = false) {
 function fetchPrompts(newPageNumber = 1) {
   chrome.storage.local.get(['settings'], ({ settings }) => {
     const { selectedLibrarySortBy, selectedLibraryCategory, selectedLibraryLanguage } = settings;
-    getPrompts(newPageNumber, promptLibrarySearchTerm, selectedLibrarySortBy.code, selectedLibraryLanguage.code, selectedLibraryCategory.code).then((data) => {
+    chrome.runtime.sendMessage({
+      getPrompts: true,
+      detail: {
+        pageNumber: newPageNumber,
+        searchTerm: promptLibrarySearchTerm,
+        sortBy: selectedLibrarySortBy.code,
+        language: selectedLibraryLanguage.code,
+        category: selectedLibraryCategory.code,
+      },
+    }, (data) => {
       promptLibraryMaxPageNumber = data.count % 24 === 0 ? data.count / 24 : Math.floor(data.count / 24) + 1;
       const listComponent = promptLibraryListComponent(data);
       updateLibraryList(listComponent);
@@ -445,7 +490,12 @@ function openReportPromptModal(libraryPrompt) {
   reportModalSubmitButton.style = 'font-size:0.875rem;font-weight:500;padding:8px 16px;';
   reportModalSubmitButton.textContent = 'Submit';
   reportModalSubmitButton.addEventListener('click', () => {
-    report(libraryPrompt.id).then((data) => {
+    chrome.runtime.sendMessage({
+      report: true,
+      detail: {
+        promptId: libraryPrompt.id,
+      },
+    }, (data) => {
       if (data.status === 'success') {
         toast('Prompt reported');
       }
@@ -527,11 +577,11 @@ function promptLibraryModalContent(libraryData) {
   // add next/previous page buttons
   const pageButtonsWrapper = document.createElement('div');
   pageButtonsWrapper.id = 'library-page-buttons-wrapper';
-  pageButtonsWrapper.style = 'display: flex; flex-direction: row; flex-wrap:wrap;justify-content: center; align-items: center;margin:8px 0;';
+  pageButtonsWrapper.style = 'display: flex; flex-direction: row; flex-wrap:wrap;justify-content: center; align-items: center;margin:8px 0;width: 100%; position:relative;';
   const pageNumberElement = document.createElement('span');
   pageNumberElement.id = 'library-page-number';
   pageNumberElement.style = 'color: lightslategray; font-size:0.8em; width: 100%; text-align: center;';
-  pageNumberElement.textContent = `Page ${promptLibraryPageNumber} of ${promptLibraryMaxPageNumber} `;
+  pageNumberElement.textContent = `Page ${promptLibraryPageNumber} of ${promptLibraryMaxPageNumber}`;
   pageButtonsWrapper.appendChild(pageNumberElement);
 
   const previousPageButton = document.createElement('button');
@@ -557,7 +607,7 @@ function promptLibraryModalContent(libraryData) {
       previousPageButton.style.opacity = '1';
     }
     fetchPrompts(promptLibraryPageNumber);
-    pageNumberElement.textContent = `Page ${promptLibraryPageNumber} of ${promptLibraryMaxPageNumber} `;
+    pageNumberElement.textContent = `Page ${promptLibraryPageNumber} of ${promptLibraryMaxPageNumber}`;
   });
   pageButtonsWrapper.appendChild(previousPageButton);
   const nextPageButton = document.createElement('button');
@@ -576,9 +626,19 @@ function promptLibraryModalContent(libraryData) {
       nextPageButton.style.opacity = '0.5';
     }
     fetchPrompts(promptLibraryPageNumber);
-    pageNumberElement.textContent = `Page ${promptLibraryPageNumber} of ${promptLibraryMaxPageNumber} `;
+    pageNumberElement.textContent = `Page ${promptLibraryPageNumber} of ${promptLibraryMaxPageNumber}`;
   });
   pageButtonsWrapper.appendChild(nextPageButton);
+
+  // submit prompt button
+  const submitPromptButton = document.createElement('button');
+  submitPromptButton.classList = 'btn flex justify-center gap-2 btn-primary border-0 md:border';
+  submitPromptButton.style = 'font-size:0.8em; padding:4px 8px; margin-left:8px;position: absolute;right: 24px;bottom: 0;';
+  submitPromptButton.textContent = '+ Share a prompt';
+  submitPromptButton.addEventListener('click', () => {
+    openSubmitPromptModal('', '', null, '', [], '', true);
+  });
+  pageButtonsWrapper.appendChild(submitPromptButton);
 
   content.appendChild(libraryFilterElement);
   content.appendChild(libraryList);
@@ -607,7 +667,7 @@ function updatePageButtons() {
     nextPageButton.style.opacity = 1;
   }
   const pageNumberElement = document.querySelector('span[id="library-page-number"]');
-  pageNumberElement.textContent = `Page ${promptLibraryPageNumber} of ${promptLibraryMaxPageNumber} `;
+  pageNumberElement.textContent = `Page ${promptLibraryPageNumber} of ${promptLibraryMaxPageNumber}`;
 }
 function promptLibraryModalActions() {
   // add actionbar at the bottom of the content

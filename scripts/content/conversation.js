@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-globals */
 // eslint-disable-next-line no-unused-vars
-/* global getConversation, submitChat, openSubmitPromptModal, initializeRegenerateResponseButton, toggleTextAreaElement, rowAssistant, rowUser, copyRichText, messageFeedback, openFeedbackModal, refreshConversations, initializeStopGeneratingResponseButton, chatStreamIsClosed:true, generateInstructions, isGenerating:true, scrolUpDetected:true, addScrollDetector, generateSuggestions */
+/* global getConversation, submitChat, openSubmitPromptModal, initializeRegenerateResponseButton, showHideTextAreaElement, rowAssistant, rowUser, copyRichText, messageFeedback, openFeedbackModal, refreshConversations, initializeStopGeneratingResponseButton, chatStreamIsClosed:true, generateInstructions, isGenerating:true, scrolUpDetected:true, addScrollDetector, languageList, writingStyleList, toneList, showAutoSyncWarning, arkoseTrigger */
 
 function addPinNav(sortedNodes) {
   chrome.storage.local.get(['settings'], (res) => {
@@ -33,13 +33,20 @@ function addPinNav(sortedNodes) {
     main.appendChild(pinNav);
   });
 }
-function updateModel(modelSlug, pluginIds = []) {
+function updateModel(modelSlug, fullConversation) {
+  const pluginIds = fullConversation.plugin_ids || [];
+
+  const { languageCode, toneCode, writingStyleCode } = fullConversation;
+
   if (!modelSlug) return;
   chrome.storage.local.get(['settings', 'models', 'unofficialModels', 'customModels', 'enabledPluginIds'], ({
     settings, models, unofficialModels, customModels, enabledPluginIds,
   }) => {
     const allModels = [...models, ...unofficialModels, ...customModels];
     const selectedModel = allModels.find((m) => m.slug === modelSlug);
+    if (selectedModel.slug === 'gpt-4-code-interpreter' && settings.autoSync) {
+      showAutoSyncWarning('Uploading files with <b style="color:white;">Advanced Data Analysis</b> model requires <b style="color:white;">Auto Sync to be OFF</b>. Please turn off Auto Sync if you need to upload a file. You can turn Auto Sync back ON (<b style="color:white;">CMD/CTRL+ALT+A</b>) again after submitting your file.');
+    }
     const pluginsDropdownWrapper = document.querySelector('#plugins-dropdown-wrapper-navbar');
     if (pluginsDropdownWrapper) {
       if (selectedModel.slug.includes('plugins')) {
@@ -54,11 +61,24 @@ function updateModel(modelSlug, pluginIds = []) {
       pluginDropdownButton.style.opacity = 0.75;
       pluginDropdownButton.title = 'Changing plugins in the middle of the conversation is not allowed';
     }
-    chrome.storage.local.set({ settings: { ...settings, selectedModel }, enabledPluginIds: pluginIds || enabledPluginIds });
+    chrome.storage.local.set({
+      settings: {
+        ...settings,
+        selectedModel,
+        selectedLanguage: languageList.find((language) => language.code === languageCode || language.code === 'default'),
+        selectedTone: toneList.find((tone) => tone.code === toneCode || tone.code === 'default'),
+        selectedWritingStyle: writingStyleList.find((writingStyle) => writingStyle.code === writingStyleCode || writingStyle.code === 'default'),
+      },
+      enabledPluginIds: pluginIds || enabledPluginIds,
+    }, () => {
+      // get the li with id of the language code and click it
+      document.querySelector(`#language-list-dropdown li#language-selector-option-${languageCode}`)?.click();
+      document.querySelector(`#tone-list-dropdown li#tone-selector-option-${toneCode}`)?.click();
+      document.querySelector(`#writing-style-list-dropdown li#writing-style-selector-option-${writingStyleCode}`)?.click();
+    });
   });
 }
 function loadConversationFromNode(conversationId, newMessageId, oldMessageId, searchValue = '') {
-  // chatStreamIsClosed = true;
   chrome.storage.sync.get(['name', 'avatar'], (result) => {
     chrome.storage.local.get(['conversations', 'settings', 'models'], (res) => {
       const fullConversation = res.conversations?.[conversationId];
@@ -93,7 +113,7 @@ function loadConversationFromNode(conversationId, newMessageId, oldMessageId, se
             nextMessage = sortedNodes[i + 1]?.message;
           }
           sortedNodes[i].message = message;
-          messageDiv += rowAssistant(fullConversation, sortedNodes[i], threadIndex, threadCount, res.models, settings.customConversationWidth, settings.conversationWidth, searchValue);
+          messageDiv += rowAssistant(fullConversation, sortedNodes[i], threadIndex, threadCount, res.models, settings.customConversationWidth, settings.conversationWidth, settings.showMessageTimestamp, settings.showWordCount, searchValue);
         }
       }
       const conversationBottom = document.querySelector('#conversation-bottom');
@@ -107,12 +127,12 @@ function loadConversationFromNode(conversationId, newMessageId, oldMessageId, se
       // inser messageDiv html above conversation bottom
       conversationBottom.insertAdjacentHTML('beforebegin', messageDiv);
 
-      toggleTextAreaElement();
+      showHideTextAreaElement();
       addConversationsEventListeners(fullConversation.id);
       initializeRegenerateResponseButton();
       initializeStopGeneratingResponseButton();
       addPinNav(sortedNodes);
-      updateModel(sortedNodes[sortedNodes.length - 1].message?.metadata?.model_slug, fullConversation.plugin_ids || []);
+      updateModel(sortedNodes[sortedNodes.length - 1].message?.metadata?.model_slug, fullConversation);
       updateTotalCounter();
     });
   });
@@ -120,20 +140,22 @@ function loadConversationFromNode(conversationId, newMessageId, oldMessageId, se
 
 // eslint-disable-next-line no-unused-vars
 function loadConversation(conversationId, searchValue = '', focusOnInput = true) {
-  // chatStreamIsClosed = true;
+  //  = true;
+  const suggestionsWrapper = document.querySelector('#suggestions-wrapper');
+  if (suggestionsWrapper) suggestionsWrapper.remove();
   scrolUpDetected = false;
-  chrome.storage.sync.get(['name', 'avatar', 'conversationsOrder'], (result) => {
-    chrome.storage.local.get(['conversations', 'settings', 'models'], (res) => {
-      const { conversationsOrder } = result;
-      const { settings } = res;
-      const folderConatainingConversation = conversationsOrder.find((folder) => folder?.conversationIds?.includes(conversationId?.slice(0, 5)));
+  chrome.storage.sync.get(['name', 'avatar'], (result) => {
+    chrome.storage.local.get(['conversationsOrder', 'conversations', 'settings', 'models'], (res) => {
+      const { settings, conversationsOrder } = res;
+      const folderConatainingConversation = conversationsOrder.find((folder) => folder?.conversationIds?.includes(conversationId));
       let folderName = '';
       if (folderConatainingConversation) {
         folderName = folderConatainingConversation.name;
       }
       const fullConversation = res.conversations?.[conversationId];
+
       // set page title meta to fullConversation.title
-      document.title = fullConversation.title;
+      document.title = fullConversation.title || 'New chat';
 
       if (!fullConversation || !fullConversation?.current_node) return;
       const main = document.querySelector('main');
@@ -153,7 +175,7 @@ function loadConversation(conversationId, searchValue = '', focusOnInput = true)
       let currentNodeId = fullConversation.current_node;
       // mapping: {id: message, id: message }
       // remove all the nodes that are not user or assistant
-      // (node) => ['user', 'assistant'].includes(node.author.role) && node.recipient === 'all');
+      // (node) => ['user', 'assistant'].includes(node.author?.role) && node.recipient === 'all');
 
       while (currentNodeId) {
         const currentNode = fullConversation.mapping[currentNodeId];
@@ -171,9 +193,12 @@ function loadConversation(conversationId, searchValue = '', focusOnInput = true)
       }
       sortedNodes.reverse();
       //--------
-      let messageDiv = `<div id="conversation-top" class="w-full flex items-center justify-center border-b border-black/10 dark:border-gray-900/50 text-gray-800 dark:text-gray-100 group bg-gray-50 dark:bg-[#444654]" style="min-height:56px;z-index:1;"><strong>${folderName ? `${folderName}  &nbsp;&nbsp;&nbsp;› &nbsp;&nbsp;&nbsp;` : ''}</strong>${fullConversation.title}</div>`;
+      const systemMessage = sortedNodes.find((node) => node?.message?.role === 'system' || node?.message?.author?.role === 'system');
+      const customInstrucionProfile = systemMessage?.message?.metadata?.user_context_message_data || undefined;
+
+      let messageDiv = `<div id="conversation-top" class="w-full flex items-center justify-center border-b border-black/10 dark:border-gray-900/50 text-gray-800 dark:text-gray-100 group bg-gray-50 dark:bg-[#444654]" style="min-height:56px;z-index:0;"><strong>${folderName ? `${folderName}  &nbsp;&nbsp;&nbsp;› &nbsp;&nbsp;&nbsp;` : ''}</strong>${fullConversation.title}${customInstrucionProfile ? `<span style="display:flex;" title=">> What would you like ChatGPT to know about you to provide better responses?\n${customInstrucionProfile.about_user_message} \n\n>> How would you like ChatGPT to respond?\n${customInstrucionProfile.about_model_message}">&nbsp;&nbsp;<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" fill="none" class="ml-0.5 mt-0.5 h-4 w-4 flex-shrink-0 text-gray-600 dark:text-gray-200 sm:mb-0.5 sm:mt-0 sm:h-5 sm:w-5"><path d="M8.4375 8.4375L8.46825 8.4225C8.56442 8.37445 8.67235 8.35497 8.77925 8.36637C8.88615 8.37776 8.98755 8.41955 9.07143 8.48678C9.15532 8.55402 9.21818 8.64388 9.25257 8.74574C9.28697 8.8476 9.29145 8.95717 9.2655 9.0615L8.7345 11.1885C8.70836 11.2929 8.7127 11.4026 8.74702 11.5045C8.78133 11.6065 8.84418 11.6965 8.9281 11.7639C9.01202 11.8312 9.1135 11.8731 9.2205 11.8845C9.32749 11.8959 9.43551 11.8764 9.53175 11.8282L9.5625 11.8125M15.75 9C15.75 9.88642 15.5754 10.7642 15.2362 11.5831C14.897 12.4021 14.3998 13.1462 13.773 13.773C13.1462 14.3998 12.4021 14.897 11.5831 15.2362C10.7642 15.5754 9.88642 15.75 9 15.75C8.11358 15.75 7.23583 15.5754 6.41689 15.2362C5.59794 14.897 4.85382 14.3998 4.22703 13.773C3.60023 13.1462 3.10303 12.4021 2.76381 11.5831C2.42459 10.7642 2.25 9.88642 2.25 9C2.25 7.20979 2.96116 5.4929 4.22703 4.22703C5.4929 2.96116 7.20979 2.25 9 2.25C10.7902 2.25 12.5071 2.96116 13.773 4.22703C15.0388 5.4929 15.75 7.20979 15.75 9ZM9 6.1875H9.006V6.1935H9V6.1875Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>` : ''}</div>`;
       if (fullConversation.archived) {
-        messageDiv = '<div id="conversation-top"></div><div style="display: flex; align-items: center; justify-content: center; min-height: 56px; width: 100%; color:white; background-color: #ff0000; position: sticky; top: 0;z-index:1;">This is an archived chat. You can read archived chats, but you cannot continue them.</div>';
+        messageDiv = '<div id="conversation-top"></div><div style="display: flex; align-items: center; justify-content: center; min-height: 56px; width: 100%; color:white; background-color: #ff0000; position: sticky; top: 0;z-index:0;">This is an archived chat. You can read archived chats, but you cannot continue them.</div>';
       }
       messageDiv.id = 'conversation-wrapper';
       for (let i = 0; i < sortedNodes.length; i += 1) {
@@ -186,12 +211,13 @@ function loadConversation(conversationId, searchValue = '', focusOnInput = true)
         if (message.recipient === 'all' && (message.role === 'assistant' || message.author?.role === 'assistant')) {
           let nextMessage = sortedNodes[i + 1]?.message;
           while (nextMessage && nextMessage.recipient === 'all' && (nextMessage.role === 'assistant' || nextMessage.author?.role === 'assistant')) {
-            message.content.parts = [`${message.content.parts.join('')}${nextMessage.content.parts.join('')}`];
+            message.content.parts.push(...nextMessage.content.parts);
+            // message.content.parts = [`${message.content.parts.join('')}${nextMessage.content.parts.join('')}`];
             i += 1;
             nextMessage = sortedNodes[i + 1]?.message;
           }
           sortedNodes[i].message = message;
-          messageDiv += rowAssistant(fullConversation, sortedNodes[i], threadIndex, threadCount, res.models, settings.customConversationWidth, settings.conversationWidth, searchValue);
+          messageDiv += rowAssistant(fullConversation, sortedNodes[i], threadIndex, threadCount, res.models, settings.customConversationWidth, settings.conversationWidth, settings.showMessageTimestamp, settings.showWordCount, searchValue);
         }
       }
       conversationDiv.innerHTML = messageDiv;
@@ -202,7 +228,7 @@ function loadConversation(conversationId, searchValue = '', focusOnInput = true)
       const bottomDivContent = document.createElement('div');
       bottomDivContent.classList = 'relative text-base gap-4 md:gap-6 m-auto md:max-w-2xl lg:max-w-2xl xl:max-w-3xl flex lg:px-0';
       if (settings.customConversationWidth) {
-        bottomDivContent.style = `max-width: ${settings.conversationWidth} % `;
+        bottomDivContent.style = `max-width: ${settings.conversationWidth} %;`;
       }
       bottomDiv.appendChild(bottomDivContent);
       const totalCounter = document.createElement('div');
@@ -213,11 +239,10 @@ function loadConversation(conversationId, searchValue = '', focusOnInput = true)
       outerDiv.appendChild(innerDiv);
       const contentWrapper = main.querySelector('.flex-1.overflow-hidden');
       contentWrapper.remove();
-      main.prepend(outerDiv);
+      main.firstChild.prepend(outerDiv);
       if (!searchValue) {
         if (focusOnInput) {
-          const inputForm = main.querySelector('form');
-          const textAreaElement = inputForm.querySelector('textarea');
+          const textAreaElement = main.querySelector('form textarea');
           if (textAreaElement) textAreaElement.focus();
         }
         innerDiv.scrollTop = innerDiv.scrollHeight;
@@ -229,7 +254,7 @@ function loadConversation(conversationId, searchValue = '', focusOnInput = true)
           searchElement.scrollIntoView();
         }
       }
-      toggleTextAreaElement();
+      showHideTextAreaElement();
       addConversationsEventListeners(fullConversation.id);
       initializeRegenerateResponseButton();
       initializeStopGeneratingResponseButton();
@@ -238,8 +263,11 @@ function loadConversation(conversationId, searchValue = '', focusOnInput = true)
         refreshConversations(res.conversations);
       }
       addPinNav(sortedNodes);
-      updateModel(sortedNodes[sortedNodes.length - 1].message?.metadata?.model_slug, fullConversation.plugin_ids || []);
+      updateModel(sortedNodes[sortedNodes.length - 1].message?.metadata?.model_slug, fullConversation);
       updateTotalCounter();
+      if (settings.autoClick) {
+        document.querySelector('#auto-click-button').click();
+      }
     });
   });
 }
@@ -305,49 +333,55 @@ function addConversationsEventListeners(conversationId) {
         const userInput = oldElement.innerText;
         const textArea = document.createElement('textarea');
         textArea.classList = 'm-0 resize-none border-0 bg-transparent p-0 focus:ring-0 focus-visible:ring-0';
-        textArea.style = `height: ${oldElement.offsetHeight}px; overflow-y: hidden; `;
+        textArea.style = `height: ${oldElement.offsetHeight}px; overflow-y: hidden;`;
         textArea.value = userInput;
         textArea.spellcheck = false;
-        textArea.id = `message-text-${messageId} `;
+        textArea.id = `message-text-${messageId}`;
         textArea.addEventListener('input', (e) => {
-          e.target.style.height = `${e.target.scrollHeight} px`;
+          e.target.style.height = `${e.target.scrollHeight}px`;
         });
         oldElement.parentElement.replaceChild(textArea, oldElement);
         textArea.focus();
         const actionDiv = document.createElement('div');
         actionDiv.classList = 'text-center mt-2 flex justify-center';
-        actionDiv.id = `action-div-${messageId} `;
+        actionDiv.id = `action-div-${messageId}`;
         const saveButton = document.createElement('button');
         saveButton.classList = 'btn flex justify-center gap-2 btn-primary mr-2';
         saveButton.innerText = 'Save & Submit';
         saveButton.addEventListener('click', () => {
+          if (result.settings.selectedModel.tags.includes('gpt4')) {
+            arkoseTrigger();
+          }
           let newMessage = textArea.value;
           // this is the right way, but OpenAI always creat a new chat even if you don't change the input, so we follow the same behavior
           // const newMessageId = newMessage !== userInput ? self.crypto.randomUUID() : messageId;
           const newMessageId = self.crypto.randomUUID();
           const newElement = document.createElement('div');
           newElement.classList = oldElement.classList;
-          newElement.id = `message-text-${newMessageId} `;
+          newElement.id = `message-text-${newMessageId}`;
           newElement.innerText = newMessage;
           textArea.parentElement.replaceChild(newElement, textArea);
           actionDiv.remove();
           // if (newMessage.trim() !== userInput.trim()) {
-          const messageWrapper = document.querySelector(`#message-wrapper-${messageId} `);
-          messageWrapper.id = `message-wrapper-${newMessageId} `;
+          const messageWrapper = document.querySelector(`#message-wrapper-${messageId}`);
+          messageWrapper.id = `message-wrapper-${newMessageId}`;
           const parent = messageWrapper.previousElementSibling;
           // default parentId to root message
-          let parentId = Object.values(conversation.mapping).find((m) => m?.message?.author?.role === 'system')?.id;
+          let parentId = Object.values(conversation.mapping).find((m) => m?.message?.role === 'system' || m?.message?.author?.role === 'system')?.id;
 
-          if (parent && parent.id.startsWith('message-wrapper-')) parentId = parent.id.split('message-wrapper-').pop();
+          if (parent && parent.id.startsWith('message-wrapper-')) {
+            parentId = parent.id.split('message-wrapper-').pop();
+          }
+
           while (messageWrapper.nextElementSibling && messageWrapper.nextElementSibling.id.startsWith('message-wrapper-')) {
             messageWrapper.nextElementSibling.remove();
           }
           // messageWrapper.remove();
-          const threadCountWrapper = messageWrapper.querySelector(`#thread-count-wrapper-${messageId} `);
+          const threadCountWrapper = messageWrapper.querySelector(`#thread-count-wrapper-${messageId}`);
           const [, childCount] = threadCountWrapper.textContent.split(' / ');
-          const threadPrevButton = messageWrapper.querySelector(`#thread-prev-button-${messageId} `);
+          const threadPrevButton = messageWrapper.querySelector(`#thread-prev-button-${messageId}`);
           threadPrevButton.disabled = false;
-          const threadNextButton = messageWrapper.querySelector(`#thread-next-button-${messageId} `);
+          const threadNextButton = messageWrapper.querySelector(`#thread-next-button-${messageId}`);
           threadNextButton.disabled = true;
           threadCountWrapper.innerText = `${parseInt(childCount, 10) + 1} / ${parseInt(childCount, 10) + 1}`;
           const threadButtonsWrapper = messageWrapper.querySelector(`#thread-buttons-wrapper-${messageId}`);
@@ -443,7 +477,11 @@ function addConversationsEventListeners(conversationId) {
     const element = document.querySelector(`#message-text-${messageId}`);
     const copyMenu = document.querySelector(`#copy-result-menu-${messageId}`);
     const htmlButton = document.querySelector(`#result-html-copy-button-${messageId}`);
+    const newHtmlButton = htmlButton.cloneNode(true);
+    htmlButton.parentNode.replaceChild(newHtmlButton, htmlButton);
     const markdownButton = document.querySelector(`#result-markdown-copy-button-${messageId}`);
+    const newMarkdownButton = markdownButton.cloneNode(true);
+    markdownButton.parentNode.replaceChild(newMarkdownButton, markdownButton);
 
     button.addEventListener('mouseover', () => {
       copyMenu.style.display = 'block';
@@ -460,7 +498,13 @@ function addConversationsEventListeners(conversationId) {
     button.addEventListener('click', () => {
       chrome.storage.local.get(['conversations', 'settings'], (result) => {
         const conversation = result.conversations[conversationId];
-        const parentId = conversation.mapping[messageId].parent;
+        // while parent is not user, keep going up
+        let parentId = conversation.mapping[messageId].parent;
+        let parentRole = conversation.mapping[parentId].message.author?.role || conversation.mapping[parentId].message.role;
+        while (parentRole !== 'user') {
+          parentId = conversation.mapping[parentId].parent;
+          parentRole = conversation.mapping[parentId].message.author?.role || conversation.mapping[parentId].message.role;
+        }
         const parentMessage = conversation.mapping[parentId].message.content.parts.join('\n');
         const codeHeaders = document.querySelectorAll('#code-header');
         // hide all code headers
@@ -468,7 +512,7 @@ function addConversationsEventListeners(conversationId) {
           header.style.display = 'none';
         });
         const text = `${result.settings.copyMode ? `>> USER: ${parentMessage}\n>> ASSISTANT: ` : ''}${element.innerText}`;
-        navigator.clipboard.writeText(text);
+        navigator.clipboard.writeText(text.trim());
         codeHeaders.forEach((header) => {
           header.style.display = 'flex';
         });
@@ -482,10 +526,15 @@ function addConversationsEventListeners(conversationId) {
         );
       });
     });
-    htmlButton.addEventListener('click', () => {
+    newHtmlButton.addEventListener('click', () => {
       chrome.storage.local.get(['conversations', 'settings'], (result) => {
         const conversation = result.conversations[conversationId];
-        const parentId = conversation.mapping[messageId].parent;
+        let parentId = conversation.mapping[messageId].parent;
+        let parentRole = conversation.mapping[parentId].message.author?.role || conversation.mapping[parentId].message.role;
+        while (parentRole !== 'user') {
+          parentId = conversation.mapping[parentId].parent;
+          parentRole = conversation.mapping[parentId].message.author?.role || conversation.mapping[parentId].message.role;
+        }
         const parentMessage = conversation.mapping[parentId].message.content.parts.join('\n');
         const newElement = element.cloneNode(true);
         if (result.settings.copyMode) {
@@ -493,29 +542,34 @@ function addConversationsEventListeners(conversationId) {
         }
         copyRichText(newElement);
         // animate copy htmlButton text to copied and back in 3 seconds
-        htmlButton.textContent = 'Copied!';
+        newHtmlButton.textContent = 'Copied!';
         setTimeout(
           () => {
-            htmlButton.textContent = 'HTML';
+            newHtmlButton.textContent = 'HTML';
           },
           1500,
         );
       });
     });
-    markdownButton.addEventListener('click', () => {
+    newMarkdownButton.addEventListener('click', () => {
       chrome.storage.local.get(['settings'], (result) => {
         getConversation(conversationId).then((conversation) => {
           const { message } = conversation.mapping[messageId];
-          const parentId = conversation.mapping[messageId].parent;
+          let parentId = conversation.mapping[messageId].parent;
+          let parentRole = conversation.mapping[parentId].message.author?.role || conversation.mapping[parentId].message.role;
+          while (parentRole !== 'user') {
+            parentId = conversation.mapping[parentId].parent;
+            parentRole = conversation.mapping[parentId].message.author?.role || conversation.mapping[parentId].message.role;
+          }
           const parentMessage = conversation.mapping[parentId].message.content.parts.join('\n');
           const text = `${result.settings.copyMode ? `##USER:\n${parentMessage}\n\n##ASSISTANT:\n` : ''}${message.content.parts.join('\n')}`;
-          navigator.clipboard.writeText(text);
+          navigator.clipboard.writeText(text.trim());
 
           // animate copy markdownButton text to copied and back in 3 seconds
-          markdownButton.textContent = 'Copied!';
+          newMarkdownButton.textContent = 'Copied!';
           setTimeout(
             () => {
-              markdownButton.textContent = 'Markdown';
+              newMarkdownButton.textContent = 'Markdown';
             },
             1500,
           );

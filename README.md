@@ -35,6 +35,8 @@ https://user-images.githubusercontent.com/574142/232172841-50f1b114-ef47-4533-a6
 
 🔁 Auto Sync: Never lose your chats. Automatically sync a copy of all your chats on ChatGPT to your computer
 
+🏎️ Quick Sync: Select the option to only sync the last 100 chats in your history for best performance
+
 📥 Export: Select and Export any number of your chats into multiple formats(.txt, .json, .md). You can also export your prompt history, your settings, your shortcuts and your folders.
 
 🔎 Search and Highlight: Search through all your previous chats on ChatGPT and highlight results for quick review
@@ -52,6 +54,10 @@ https://user-images.githubusercontent.com/574142/232172841-50f1b114-ef47-4533-a6
 🕵️‍♀️ Incognito Mode: Chat with History Off and continue it later
 
 ## Prompt Management for ChatGPT
+
+⛓️ Prompt Chains: Save a series of prompts as a prompt chain. Then run each prompt in the prompt chain one by one with a single click
+
+⚡️ Auto Complete Menu: Simply type @ or # to open a menu of all your custom prompts or prompt chains right above the input box
 
 🔙 Input History: Every prompt you have ever used is saved privately on your computer. Click on My Prompt History to scroll through all your ChatGPT prompt history, mark them as favorites, or share them with the community
 
@@ -76,6 +82,8 @@ https://user-images.githubusercontent.com/574142/232172841-50f1b114-ef47-4533-a6
 🎭 Tone and Style: Change the Tone and the Writing style of ChatGPT Response
 
 ## Utilities for ChatGPT
+
+👥 Custom Instruction Profiles: Easily create and save multiple custom instruction profiles and quickly access them with a click of a button
 
 ✂️ Auto Splitter: Automatically split your long input into smaller chunks and send them to ChatGPT one by one.
 
@@ -158,8 +166,7 @@ with
 
 "background": {
 	"scripts": [
-		"scripts/background/initialize.js",
-		"scripts/background/login.js"
+		"scripts/background/initialize.js"
 	]
 },
 ```
@@ -176,6 +183,17 @@ with
 4. Select the `manifest.json` file from the extension's source code folder.
 5. Firefox will prompt you to confirm the installation of the addon. Click Install.
 6. The addon will be installed and will appear in the list of installed addons on the Add-ons page.
+
+## Star History
+
+<a href="https://star-history.com/#saeedezzati/superpower-chatgpt&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=saeedezzati/superpower-chatgpt&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=saeedezzati/superpower-chatgpt&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=saeedezzati/superpower-chatgpt&type=Date" />
+  </picture>
+</a>
+
 
 ## FAQ
 

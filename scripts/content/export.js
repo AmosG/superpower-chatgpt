@@ -37,7 +37,11 @@ function getSingelConversation(conversationId, title) {
       }
       // download as .txt file
       if (title.toLowerCase() === 'text') {
-        const conversationText = messages.reverse().filter((m) => ['user', 'assistant'].includes(m.role) || ['user', 'assistant'].includes(m.author?.role)).map((m) => `${exportMode === 'both' ? `>> ${m.role ? m.role.toUpperCase() : m.author?.role.toUpperCase()}: ` : ''}${m.content.parts.join('\n').replace(/## Instructions[\s\S]*## End Instructions\n\n/, '')}`).join('\n\n');
+        const conversationText = messages.reverse().filter((m) => {
+          const role = m?.author?.role || m?.role;
+          const recipient = m?.recipient;
+          return role === 'user' || (recipient === 'all' && role === 'assistant');
+        }).map((m) => `${exportMode === 'both' ? `>> ${m.role ? m.role.toUpperCase() : m.author?.role.toUpperCase()}: ` : ''}${m.content?.parts?.join('\n').replace(/## Instructions[\s\S]*## End Instructions\n\n/, '')}`).join('\n\n');
         const element = document.createElement('a');
         element.setAttribute('href', `data:text/plain;charset=utf-8,${encodeURIComponent(conversationText)}`);
         element.setAttribute('download', `${filePrefix}-${conversationTitle}.${fileFormatConverter(title.toLowerCase())}`);
@@ -50,7 +54,11 @@ function getSingelConversation(conversationId, title) {
       }
       // download as .md file
       if (title.toLowerCase() === 'markdown') {
-        const conversationMarkdown = messages.reverse().filter((m) => ['user', 'assistant'].includes(m.role) || ['user', 'assistant'].includes(m.author?.role)).map((m) => `${exportMode === 'both' ? `## ${m.role ? m.role.toUpperCase() : m.author?.role.toUpperCase()}\n` : ''}${m.content.parts.join('\n').replace(/## Instructions[\s\S]*## End Instructions\n\n/, '')}`).join('\n\n');
+        const conversationMarkdown = messages.reverse().filter((m) => {
+          const role = m?.author?.role || m?.role;
+          const recipient = m?.recipient;
+          return role === 'user' || (recipient === 'all' && role === 'assistant');
+        }).map((m) => `${exportMode === 'both' ? `## ${m.role ? m.role.toUpperCase() : m.author?.role.toUpperCase()}\n` : ''}${m.content?.parts?.join('\n').replace(/## Instructions[\s\S]*## End Instructions\n\n/, '')}`).join('\n\n');
         const element = document.createElement('a');
         element.setAttribute('href', `data:text/plain;charset=utf-8,${encodeURIComponent(conversationMarkdown)}`);
         // add timestamp to conversation title to make file name
@@ -98,7 +106,7 @@ function addExportAsButton(title) {
   exportAsButton.textContent = title;
   exportAsButton.type = 'button';
   exportAsButton.style = 'width:100px;border:none;';
-  exportAsButton.classList.add('btn', 'flex', 'justify-center', 'gap-2', 'btn-neutral', 'border-0', 'md:border');
+  exportAsButton.classList.add('btn', 'flex', 'justify-center', 'gap-2', 'btn-neutral', 'border');
 
   exportAsButton.addEventListener('click', () => {
     const { pathname } = new URL(window.location.toString());
@@ -123,16 +131,10 @@ function addExportAsButton(title) {
 }
 function addExportButton() {
   const assistantChats = allAsistantChats();
-  const main = document.querySelector('main');
-  if (!main) return;
-  const inputForm = main.querySelector('form');
-  if (!inputForm) return;
-  const textAreaElement = inputForm.querySelector('textarea');
+  const textAreaElement = document.querySelector('main form textarea');
   if (!textAreaElement) return;
   const canSubmit = canSubmitPrompt();
 
-  const otherExportButton = document.querySelector('#export-button');
-  if (otherExportButton) otherExportButton.remove();
   const lastExportButton = document.querySelector('#export-conversation-button');
   if ((!canSubmit || assistantChats.length === 0) && lastExportButton) {
     lastExportButton.remove();
@@ -145,8 +147,8 @@ function addExportButton() {
   exportButton.id = 'export-conversation-button';
   exportButton.type = 'button';
   exportButton.textContent = 'Export';
-  exportButton.classList.add('btn', 'flex', 'justify-center', 'gap-2', 'btn-neutral', 'border-0', 'md:border');
-  exportButton.style = 'position:absolute;right:0px;width:104px;';
+  exportButton.classList.add('btn', 'justify-center', 'gap-2', 'btn-neutral', 'border');
+  exportButton.style = 'position:absolute;right:0px;width:104px;display:none;';
   // add icon
   const exportButtonIcon = document.createElement('img');
   exportButtonIcon.style = 'height:20px;';
@@ -194,15 +196,35 @@ function addExportButton() {
   });
 
   if (canSubmit) {
-    const textAreaElementWrapper = textAreaElement.parentNode;
-    const nodeBeforetTextAreaElement = textAreaElementWrapper.previousSibling;
-    if (!nodeBeforetTextAreaElement) return;
-    if (nodeBeforetTextAreaElement.classList.length === 0) {
-      nodeBeforetTextAreaElement.classList = 'h-full flex ml-1 md:w-full md:m-auto md:mb-2 gap-0 md:gap-2 justify-center';
-      nodeBeforetTextAreaElement.firstChild.classList = '';
-    }
-    nodeBeforetTextAreaElement.style.minHeight = '38px';
-    nodeBeforetTextAreaElement.appendChild(exportButton);
+    const inputForm = document.querySelector('main form');
+    const inputFormFirstChild = inputForm.firstChild;
+    chrome.storage.local.get('settings', ({ settings }) => {
+      let inputFormActionWrapper = settings.autoSync
+        ? inputForm.querySelector('#input-form-action-wrapper')
+        : inputForm.firstChild.firstChild.firstChild;
+      if (!settings.autoSync) {
+        const growElement = inputFormActionWrapper.querySelector('.grow');
+        if (growElement) {
+          growElement.remove();
+        }
+      }
+      if (!inputFormActionWrapper) {
+        if (!inputFormFirstChild.firstChild.contains(textAreaElement)) {
+          inputFormFirstChild.firstChild.remove();
+        }
+        // create new div
+        const newDiv = document.createElement('div');
+        newDiv.id = 'input-form-action-wrapper';
+        newDiv.classList = 'h-full flex ml-1 md:w-full md:m-auto md:mb-4 gap-0 md:gap-2 justify-center items-end';
+        // prepent inputform with new div
+        inputFormFirstChild.prepend(newDiv);
+        inputFormActionWrapper = newDiv;
+      }
+      inputFormActionWrapper.style.minHeight = '38px';
+      exportButton.style.display = settings.showExportButton ? 'flex' : 'none';
+      const existingExportButton = document.querySelector('#export-conversation-button');
+      if (!existingExportButton) inputFormActionWrapper.appendChild(exportButton);
+    });
   }
 }
 
@@ -266,7 +288,11 @@ function exportAllConversations(exportFormat) {
         }
         // download as .txt file
         if (exportFormat === 'text') {
-          const conversationText = messages.reverse().filter((m) => ['user', 'assistant'].includes(m.role) || ['user', 'assistant'].includes(m.author?.role)).map((m) => `${exportMode === 'both' ? `>> ${m.role ? m.role.toUpperCase() : m.author?.role.toUpperCase()}: ` : ''}${m.content?.parts?.join('\n').replace(/## Instructions[\s\S]*## End Instructions\n\n/, '')}`)?.join('\n\n');
+          const conversationText = messages.reverse().filter((m) => {
+            const role = m?.author?.role || m?.role;
+            const recipient = m?.recipient;
+            return role === 'user' || (recipient === 'all' && role === 'assistant');
+          }).map((m) => `${exportMode === 'both' ? `>> ${m.role ? m.role.toUpperCase() : m.author?.role.toUpperCase()}: ` : ''}${m.content?.parts?.join('\n').replace(/## Instructions[\s\S]*## End Instructions\n\n/, '')}`)?.join('\n\n');
           zip.file(`${folderName}/${filePrefix}-${conversationTitle}.${fileFormatConverter(exportFormat)}`, conversationText);
         }
         // download as .json file
@@ -276,7 +302,11 @@ function exportAllConversations(exportFormat) {
         }
         // download as .md file
         if (exportFormat === 'markdown') {
-          const conversationMarkdown = messages.reverse().filter((m) => ['user', 'assistant'].includes(m.role) || ['user', 'assistant'].includes(m.author?.role)).map((m) => `${exportMode === 'both' ? `## ${m.role ? m.role.toUpperCase() : m.author?.role.toUpperCase()}\n` : ''}${m.content?.parts?.join('\n').replace(/## Instructions[\s\S]*## End Instructions\n\n/, '')}`)?.join('\n\n');
+          const conversationMarkdown = messages.reverse().filter((m) => {
+            const role = m?.author?.role || m?.role;
+            const recipient = m?.recipient;
+            return role === 'user' || (recipient === 'all' && role === 'assistant');
+          }).map((m) => `${exportMode === 'both' ? `## ${m.role ? m.role.toUpperCase() : m.author?.role.toUpperCase()}\n` : ''}${m.content?.parts?.join('\n').replace(/## Instructions[\s\S]*## End Instructions\n\n/, '')}`)?.join('\n\n');
           zip.file(`${folderName}/${filePrefix}-${conversationTitle}.${fileFormatConverter(exportFormat)}`, conversationMarkdown);
         }
 
@@ -343,7 +373,9 @@ function openExportAllModal() {
   exportAllModal.style = 'position:fixed;top:0px;left:0px;width:100%;height:100%;background-color:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;color:lightslategray;';
   exportAllModal.id = 'export-all-modal';
   exportAllModal.addEventListener('click', (e) => {
-    if (e.target.id === 'export-all-modal') {
+    // export-all-modal-progress-bar-fill
+    const exportAllModalProgressBarFill = document.getElementById('export-all-modal-progress-bar-fill');
+    if (e.target.id === 'export-all-modal' && (exportAllModalProgressBarFill.style.width === '0%' || exportAllModalProgressBarFill.style.width === '100%')) {
       exportAllModal.remove();
     }
   });
@@ -565,18 +597,9 @@ function initializeExport() {
     // const submitButton = inputForm.querySelector('textarea ~ button');
     setTimeout(() => {
       addExportButton();
-    }, 100);
+    }, 500);
   });
-  observer.observe(main.parentElement.parentElement, { childList: true, subtree: true });
+  observer.observe(main, { childList: true, subtree: true });
 
   addExportAllButton();
-  // add event listener to dark mode button
-  const darkModeButton = document.querySelector('#dark-mode-button');
-  if (darkModeButton) {
-    darkModeButton.addEventListener('click', () => {
-      const lastExportButton = document.querySelector('#export-conversation-button');
-      if (lastExportButton) lastExportButton.remove();
-      // since this cause input form dom to change, the export button will be added back by the event listener above
-    });
-  }
 }

@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-/* global installPlugin, uninstallPlugin, showEnableMFA, pluginsDropdown, addPluginsDropdownEventListener */
+/* global installPlugin, uninstallPlugin, pluginsDropdown, addPluginsDropdownEventListener */
 let currentPluginStorePage = 1;
 function initializePluginStoreModal(plugins) {
   const pageSize = 8;
@@ -11,7 +11,7 @@ function initializePluginStoreModal(plugins) {
         style="pointer-events: auto;"
       >
         <div
-          class="grid-cols-[minmax(10px,30px)_1fr_minmax(10px,30px)] grid h-full w-full grid-rows-[minmax(10px,_1fr)_auto_minmax(10px,_1fr)] md:grid-rows-[minmax(20px,_1fr)_auto_minmax(20px,_1fr)] overflow-y-auto"
+          class="grid-cols-[10px_1fr_10px] grid h-full w-full grid-rows-[minmax(10px,_1fr)_auto_minmax(10px,_1fr)] md:grid-rows-[minmax(20px,_1fr)_auto_minmax(20px,_1fr)] overflow-y-auto"
         >
           <div
             role="dialog"
@@ -19,7 +19,7 @@ function initializePluginStoreModal(plugins) {
             aria-describedby="radix-:r2r:"
             aria-labelledby="radix-:r2q:"
             data-state="open"
-            class="relative col-auto col-start-2 row-auto row-start-2 w-full rounded-lg text-left shadow-xl transition-all left-1/2 -translate-x-1/2 bg-white dark:bg-gray-900 max-w-md w-full !max-w-7xl bg-gray-50 md:min-w-[672px] lg:min-w-[896px] xl:min-w-[1024px]"
+            class="relative col-auto col-start-2 row-auto row-start-2 w-full rounded-lg text-left shadow-xl transition-all left-1/2 -translate-x-1/2 bg-white dark:bg-gray-900 w-full max-w-7xl bg-gray-50 md:min-w-[672px] lg:min-w-[896px] xl:min-w-[1024px]"
             tabindex="-1"
             style="pointer-events: auto;"
           >
@@ -87,6 +87,28 @@ function initializePluginStoreModal(plugins) {
                       Installed
                     </div>
                   </button>
+                  <button
+                    id="plugin-filter-not-installed"
+                    class="btn relative btn-neutral focus:ring-0 text-black/50"
+                  >
+                    <div class="flex w-full gap-2 items-center justify-center">
+                      Not Installed
+                    </div>
+                  </button>
+                  <div class="relative">
+                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                      <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-gray-500 dark:text-gray-400" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                      </svg>
+                    </div>
+                    <div class="rounded-md border border-gray-300 px-3 py-2 shadow-sm focus-within:border-indigo-600 focus-within:ring-1 focus-within:ring-indigo-600 dark:bg-gray-700 pl-10">
+                      <label for="search" class="block text-xs font-medium text-gray-900 dark:text-gray-100"></label>
+                      <div class="relative">
+                        <input type="search" name="search" id="plugin-store-search" class="block w-full border-0 p-0 text-gray-900 placeholder-gray-500 outline-none focus:ring-0 dark:bg-gray-700 dark:text-gray-100 sm:text-sm" placeholder="Search plugins" value="">
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div
                   id="plugin-list-wrapper"
@@ -246,7 +268,6 @@ function renderPageNumbers(plugins) {
       ${page}</button
     >
     `).join('')}
-
     <button
       id="plugin-pagination-next"
       role="button"
@@ -273,13 +294,6 @@ function addPluginStoreEventListener(plugins) {
   pluginStoreWrapper.addEventListener('click', (event) => {
     // if outside plugin-store-dialog close it
     const pluginStoreDialog = document.getElementById('plugin-store-dialog');
-    const enableMFADialog = document.getElementById('enable-mfa-dialog');
-    if (enableMFADialog && !pluginStoreDialog && !enableMFADialog?.contains(event.target)) {
-      pluginStoreWrapper.innerHTML = initializePluginStoreModal(plugins);
-      addPluginStoreEventListener(plugins);
-
-      return;
-    }
     if (pluginStoreDialog && !pluginStoreDialog?.contains(event.target)) {
       currentPluginStorePage = 1;
       pluginStoreWrapper.remove();
@@ -290,6 +304,12 @@ function addPluginStoreEventListener(plugins) {
     currentPluginStorePage = 1;
     pluginStoreWrapper.remove();
   });
+  const pluginSearchInput = document.getElementById('plugin-store-search');
+  pluginSearchInput.addEventListener('input', () => {
+    chrome.storage.local.get(['allPlugins'], (result) => {
+      document.querySelector('[id="plugin-filter-all"]').click();
+    });
+  });
 
   const pluginFilterButtons = document.querySelectorAll('[id^="plugin-filter-"]');
   pluginFilterButtons.forEach((button) => {
@@ -298,6 +318,7 @@ function addPluginStoreEventListener(plugins) {
         const { allPlugins } = result;
         const filterType = button.id.split('plugin-filter-')[1];
         currentPluginStorePage = 1;
+        const searchValue = pluginSearchInput.value;
         const previousActivePageButton = document.querySelector('[id^="plugin-page-"].text-blue-600');
         if (previousActivePageButton) {
           previousActivePageButton.classList = 'text-sm text-black/70 dark:text-white/70 whitespace-nowrap hover:text-black/50 dark:hover:text-white/50';
@@ -311,12 +332,18 @@ function addPluginStoreEventListener(plugins) {
         let filteredPlugins = allPlugins;
         if (filterType === 'popular') {
           filteredPlugins = allPlugins.filter((plugin) => plugin.categories.map((c) => c.id).includes('most_popular'));
+          if (searchValue.trim() !== '') {
+            filteredPlugins = filteredPlugins.filter((plugin) => `${plugin.manifest.name_for_human} ${plugin.manifest.description_for_human}`.toLowerCase().includes(searchValue.toLowerCase()));
+          }
           pluginListWrapper.innerHTML = renderPluginList(filteredPlugins);
           pluginStorePaginationWrapper.innerHTML = renderPageNumbers(filteredPlugins);
           addInstallButtonEventListener(filteredPlugins);
           addPaginationEventListener(filteredPlugins);
         } else if (filterType === 'new') {
           filteredPlugins = allPlugins.filter((plugin) => plugin.categories.map((c) => c.id).includes('newly_added'));
+          if (searchValue.trim() !== '') {
+            filteredPlugins = filteredPlugins.filter((plugin) => `${plugin.manifest.name_for_human} ${plugin.manifest.description_for_human}`.toLowerCase().includes(searchValue.toLowerCase()));
+          }
           pluginListWrapper.innerHTML = renderPluginList(filteredPlugins);
           pluginStorePaginationWrapper.innerHTML = renderPageNumbers(filteredPlugins);
           addInstallButtonEventListener(filteredPlugins);
@@ -325,12 +352,30 @@ function addPluginStoreEventListener(plugins) {
           chrome.storage.local.get(['installedPlugins'], (res) => {
             const { installedPlugins } = res;
             filteredPlugins = installedPlugins;
+            if (searchValue.trim() !== '') {
+              filteredPlugins = filteredPlugins.filter((plugin) => `${plugin.manifest.name_for_human} ${plugin.manifest.description_for_human}`.toLowerCase().includes(searchValue.toLowerCase()));
+            }
+            pluginListWrapper.innerHTML = renderPluginList(filteredPlugins);
+            pluginStorePaginationWrapper.innerHTML = renderPageNumbers(filteredPlugins);
+            addInstallButtonEventListener(filteredPlugins);
+            addPaginationEventListener(filteredPlugins);
+          });
+        } else if (filterType === 'not-installed') {
+          chrome.storage.local.get(['installedPlugins'], (res) => {
+            const { installedPlugins } = res;
+            filteredPlugins = allPlugins.filter((plugin) => !installedPlugins.map((p) => p.id).includes(plugin.id));
+            if (searchValue.trim() !== '') {
+              filteredPlugins = filteredPlugins.filter((plugin) => `${plugin.manifest.name_for_human} ${plugin.manifest.description_for_human}`.toLowerCase().includes(searchValue.toLowerCase()));
+            }
             pluginListWrapper.innerHTML = renderPluginList(filteredPlugins);
             pluginStorePaginationWrapper.innerHTML = renderPageNumbers(filteredPlugins);
             addInstallButtonEventListener(filteredPlugins);
             addPaginationEventListener(filteredPlugins);
           });
         } else {
+          if (searchValue.trim() !== '') {
+            filteredPlugins = filteredPlugins.filter((plugin) => `${plugin.manifest.name_for_human} ${plugin.manifest.description_for_human}`.toLowerCase().includes(searchValue.toLowerCase()));
+          }
           pluginListWrapper.innerHTML = renderPluginList(filteredPlugins);
           pluginStorePaginationWrapper.innerHTML = renderPageNumbers(filteredPlugins);
           addInstallButtonEventListener(filteredPlugins);
@@ -396,8 +441,6 @@ function addPaginationEventListener(plugins) {
       if (pluginListWrapper) {
         pluginListWrapper.innerHTML = renderPluginList(plugins);
         addInstallButtonEventListener(plugins);
-
-        // pluginStorePaginationWrapper.innerHTML = renderPageNumbers(allPlugins);
       }
     });
   });
@@ -412,39 +455,43 @@ function addInstallButtonEventListener(plugins) {
       e.stopPropagation();
       button.disabled = true;
       if (button.innerText.toLowerCase() === 'install') {
-        chrome.storage.sync.get(['mfa'], (syncRes) => {
-          const { mfa } = syncRes;
-          const plugin = plugins.find((p) => p.id === pluginId);
-          if (plugin.oauth_client_id) {
-            if (mfa) {
-              const url = `${plugin.manifest.auth.client_url}?response_type=code&client_id=${plugin.oauth_client_id}&redirect_uri=https://chat.openai.com/aip/${plugin.id}/oauth/callback&scope=${plugin.manifest.auth.scope}`;
-              window.open(url, '_self');
-            } else {
-              const pluginStoreWrapper = document.getElementById('plugin-store-wrapper');
-              pluginStoreWrapper.innerHTML = showEnableMFA();
-            }
-          } else {
-            button.classList = 'btn relative btn-light bg-green-100 hover:bg-green-100';
-            button.innerHTML = 'Installing <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="animate-spin text-center" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>';
+        const plugin = plugins.find((p) => p.id === pluginId);
+        if (plugin.oauth_client_id) {
+          const url = `${plugin.manifest.auth.client_url}?response_type=code&client_id=${plugin.oauth_client_id}&redirect_uri=https://chat.openai.com/aip/${plugin.id}/oauth/callback&scope=${plugin.manifest.auth.scope}`;
+          window.open(url, '_self');
+        } else {
+          button.classList = 'btn relative btn-light bg-green-100 hover:bg-green-100';
+          button.innerHTML = 'Installing <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="animate-spin text-center" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>';
 
-            installPlugin(pluginId).then((res) => {
-              chrome.storage.local.get(['allPlugins', 'installedPlugins', 'enabledPluginIds'], (result) => {
-                button.disabled = false;
-                button.classList = 'btn relative btn-light hover:bg-gray-200';
-                button.innerHTML = 'Uninstall <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" > <circle cx="12" cy="12" r="10"></circle> <line x1="15" y1="9" x2="9" y2="15"></line> <line x1="9" y1="9" x2="15" y2="15"></line> </svg>';
-                const { allPlugins, installedPlugins, enabledPluginIds } = result;
-                const allPluginIndex = allPlugins.findIndex((p) => p.id === pluginId);
-                allPlugins[allPluginIndex] = res;
-                const newInstalledPlugins = installedPlugins.map((p) => p.id).includes(res.id) ? installedPlugins : [...installedPlugins, res];
-                chrome.storage.local.set({ allPlugins, installedPlugins: newInstalledPlugins });
-                const idPrefix = 'navbar';
-                const pluginsDropdownWrapper = document.getElementById(`plugins-dropdown-wrapper-${idPrefix}`);
-                pluginsDropdownWrapper.innerHTML = pluginsDropdown(newInstalledPlugins, enabledPluginIds, idPrefix);
-                addPluginsDropdownEventListener(idPrefix);
-              });
+          installPlugin(pluginId).then((res) => {
+            chrome.storage.local.get(['allPlugins', 'installedPlugins', 'enabledPluginIds'], (result) => {
+              button.disabled = false;
+              button.classList = 'btn relative btn-light hover:bg-gray-200';
+              button.innerHTML = 'Uninstall <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" > <circle cx="12" cy="12" r="10"></circle> <line x1="15" y1="9" x2="9" y2="15"></line> <line x1="9" y1="9" x2="15" y2="15"></line> </svg>';
+              const { allPlugins, installedPlugins, enabledPluginIds } = result;
+              const allPluginIndex = allPlugins.findIndex((p) => p.id === pluginId);
+              allPlugins[allPluginIndex] = res;
+              const newInstalledPlugins = installedPlugins.map((p) => p.id).includes(res.id) ? installedPlugins : [...installedPlugins, res];
+              chrome.storage.local.set({ allPlugins, installedPlugins: newInstalledPlugins });
+              const idPrefix = 'navbar';
+              const pluginsDropdownWrapper = document.getElementById(`plugins-dropdown-wrapper-${idPrefix}`);
+              pluginsDropdownWrapper.innerHTML = pluginsDropdown(newInstalledPlugins, enabledPluginIds, idPrefix);
+              addPluginsDropdownEventListener(idPrefix);
+              const selectedFilter = document.querySelector('[id^="plugin-filter-"].btn-light');
+              const filter = selectedFilter ? selectedFilter.id.split('plugin-filter-')[1] : 'all';
+              if (filter === 'not-installed') {
+                document.querySelector(`#${pluginId}`).remove();
+                const pluginListWrapper = document.getElementById('plugin-list-wrapper');
+                const pluginStorePaginationWrapper = document.getElementById('plugin-store-pagination-wrapper');
+                const notIinstalledPlugins = allPlugins.filter((p1) => !newInstalledPlugins.map((p2) => p2.id).includes(p1.id));
+                pluginListWrapper.innerHTML = renderPluginList(notIinstalledPlugins);
+                pluginStorePaginationWrapper.innerHTML = renderPageNumbers(notIinstalledPlugins);
+                addInstallButtonEventListener(notIinstalledPlugins);
+                addPaginationEventListener(notIinstalledPlugins);
+              }
             });
-          }
-        });
+          });
+        }
       } else {
         button.classList = 'btn relative btn-light bg-green-100 hover:bg-green-100';
         button.innerHTML = 'Unnstalling <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="animate-spin text-center" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>';
@@ -459,6 +506,7 @@ function addInstallButtonEventListener(plugins) {
             allPlugins[allPluginIndex] = res;
             const installedPluginIndex = installedPlugins.findIndex((p) => p.id === pluginId);
             installedPlugins.splice(installedPluginIndex, 1);
+            const newEnabledPluginIds = enabledPluginIds.filter((id) => id !== pluginId);
             const selectedFilter = document.querySelector('[id^="plugin-filter-"].btn-light');
             const filter = selectedFilter ? selectedFilter.id.split('plugin-filter-')[1] : 'all';
             if (filter === 'installed') {
@@ -471,10 +519,10 @@ function addInstallButtonEventListener(plugins) {
               addPaginationEventListener(installedPlugins);
             }
 
-            chrome.storage.local.set({ allPlugins, installedPlugins });
+            chrome.storage.local.set({ allPlugins, installedPlugins, enabledPluginIds: newEnabledPluginIds });
             const idPrefix = 'navbar';
             const pluginsDropdownWrapper = document.getElementById(`plugins-dropdown-wrapper-${idPrefix}`);
-            pluginsDropdownWrapper.innerHTML = pluginsDropdown(installedPlugins, enabledPluginIds, idPrefix);
+            pluginsDropdownWrapper.innerHTML = pluginsDropdown(installedPlugins, newEnabledPluginIds, idPrefix);
             addPluginsDropdownEventListener(idPrefix);
           });
         });
